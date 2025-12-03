@@ -15,7 +15,7 @@ import pickle
 import argparse
 import numpy as np
 import torch
-import clip
+import open_clip
 import faiss
 from PIL import Image
 
@@ -23,33 +23,40 @@ from PIL import Image
 # ============== 全域模型快取 ==============
 _cached_model = None
 _cached_preprocess = None
+_cached_tokenizer = None
 _cached_device = None
 
 
 def get_clip_model(device=None):
     """
     取得 CLIP 模型 (全域快取，只載入一次)
+    使用 OpenCLIP ViT-bigG-14 (與建立 index 時相同)
     
     Args:
         device: 'cuda' 或 'cpu'
     
     Returns:
-        (model, preprocess, device)
+        (model, preprocess, tokenizer, device)
     """
-    global _cached_model, _cached_preprocess, _cached_device
+    global _cached_model, _cached_preprocess, _cached_tokenizer, _cached_device
     
     if _cached_model is not None:
-        print("   ✅ 使用已快取的 CLIP 模型")
-        return _cached_model, _cached_preprocess, _cached_device
+        print("   ✅ 使用已快取的 CLIP 模型 (Bird)")
+        return _cached_model, _cached_preprocess, _cached_tokenizer, _cached_device
     
     _cached_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     
-    print("\n📦 載入 CLIP 模型 (首次載入，之後會使用快取)...")
-    _cached_model, _cached_preprocess = clip.load("ViT-B/32", device=_cached_device)
+    print("\n📦 載入 CLIP 模型 ViT-bigG-14 for Bird (首次載入，之後會使用快取)...")
+    _cached_model, _, _cached_preprocess = open_clip.create_model_and_transforms(
+        'ViT-bigG-14',
+        pretrained='laion2b_s39b_b160k'
+    )
+    _cached_model = _cached_model.to(_cached_device)
     _cached_model.eval()
-    print("   ✅ CLIP 模型載入完成")
+    _cached_tokenizer = open_clip.get_tokenizer('ViT-bigG-14')
+    print("   ✅ CLIP 模型載入完成 (ViT-bigG-14)")
     
-    return _cached_model, _cached_preprocess, _cached_device
+    return _cached_model, _cached_preprocess, _cached_tokenizer, _cached_device
 
 
 class BirdSearchEngine:
@@ -63,7 +70,7 @@ class BirdSearchEngine:
             device: 'cuda' 或 'cpu'，None 則自動偵測
         """
         # 使用全域快取的模型
-        self.model, self.preprocess, self.device = get_clip_model(device)
+        self.model, self.preprocess, self.tokenizer, self.device = get_clip_model(device)
         self.index_dir = index_dir
         self.path_mapping = None
         
@@ -170,8 +177,8 @@ class BirdSearchEngine:
         Returns:
             list of dict: 搜尋結果
         """
-        # 編碼查詢文字
-        text = clip.tokenize([query]).to(self.device)
+        # 編碼查詢文字 (使用 open_clip tokenizer)
+        text = self.tokenizer([query]).to(self.device)
         with torch.no_grad():
             query_emb = self.model.encode_text(text)
             query_emb = query_emb / query_emb.norm(dim=-1, keepdim=True)

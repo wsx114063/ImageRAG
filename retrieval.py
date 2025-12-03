@@ -236,6 +236,7 @@ def retrieve_img_per_caption(captions, image_paths, embeddings_path="", k=3, dev
 
 # ============== FAISS Index 搜尋功能 ==============
 # 直接引用已建立的 search_bird.py 和 search_car.py
+# 注意: Bird 和 Car 都使用相同的 CLIP 模型 (ViT-bigG-14)
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "datasets/bird"))
@@ -243,6 +244,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "datasets/car"))
 
 from search_bird import BirdSearchEngine, get_clip_model as get_bird_clip_model
 from search_car import CarSearchEngine, get_clip_model as get_car_clip_model
+import search_bird
+import search_car
 
 # 全域快取
 _bird_engine = None
@@ -252,6 +255,7 @@ _car_engine = None
 def init_faiss_retrieval(bird_index_dir=None, car_index_dir=None, device='cuda'):
     """
     初始化 FAISS 檢索引擎 (只載入一次模型)
+    Bird 和 Car 共用同一個 CLIP 模型 (ViT-bigG-14)
     
     Args:
         bird_index_dir: Bird dataset index 目錄路徑
@@ -262,10 +266,18 @@ def init_faiss_retrieval(bird_index_dir=None, car_index_dir=None, device='cuda')
     
     print("\n" + "=" * 60)
     print("🚀 初始化 FAISS 檢索引擎")
+    print("   📍 Bird 和 Car 共用 CLIP ViT-bigG-14 模型")
     print("=" * 60)
     
+    # 先載入 Bird (會載入 CLIP 模型)
     if bird_index_dir:
         _bird_engine = BirdSearchEngine(index_dir=bird_index_dir, device=device)
+        
+        # 把 Bird 的模型快取分享給 Car (避免重複載入)
+        search_car._cached_model = search_bird._cached_model
+        search_car._cached_preprocess = search_bird._cached_preprocess
+        search_car._cached_tokenizer = search_bird._cached_tokenizer
+        search_car._cached_device = search_bird._cached_device
     
     if car_index_dir:
         _car_engine = CarSearchEngine(index_dir=car_index_dir, device=device)
