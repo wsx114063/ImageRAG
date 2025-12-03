@@ -89,7 +89,8 @@ if __name__ == "__main__":
 
     cur_out_path = os.path.join(args.out_path, f"{args.out_name}_no_imageRAG.png")
     if not os.path.exists(cur_out_path):
-        # 使用 FAISS 搜尋取代寫死的路徑
+        # 使用 FAISS 做Retrieval
+        # todo 未處理keyword提取，可能透過LLM提取關鍵字分成兩個Keyword
         bird_image_path = search_bird_image_path(args.prompt, k=1, index_type="image")
         car_image_path = search_car_image_path(args.prompt, k=1, index_type="combined")
         
