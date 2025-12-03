@@ -8,7 +8,7 @@ from diffusers import AutoPipelineForText2Image, DiffusionPipeline, ControlNetMo
 from transformers import CLIPVisionModelWithProjection
 
 from utils import *
-from retrieval import *
+from retrieval import init_faiss_retrieval, search_bird_image_path, search_car_image_path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="imageRAG pipeline")
@@ -25,6 +25,8 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, default="sd_first", choices=['sd_first', 'generation'])
     parser.add_argument("--only_rephrase", action='store_true')
     parser.add_argument("--retrieval_method", type=str, default="CLIP", choices=['CLIP', 'SigLIP', 'MoE', 'gpt_rerank'])
+    parser.add_argument("--bird_index_dir", type=str, default="datasets/bird/index", help="Bird FAISS index 目錄")
+    parser.add_argument("--car_index_dir", type=str, default="datasets/car/index", help="Car FAISS index 目錄")
 
     args = parser.parse_args()
 
@@ -41,6 +43,13 @@ if __name__ == "__main__":
         retrieval_image_paths = retrieval_image_paths[:args.data_lim]
 
     embeddings_path = args.embeddings_path or f"datasets/embeddings/{args.dataset}"
+
+    # 初始化 FAISS 檢索引擎 (只載入一次)
+    init_faiss_retrieval(
+        bird_index_dir=args.bird_index_dir,
+        car_index_dir=args.car_index_dir,
+        device=device
+    )
 
     image_encoder = CLIPVisionModelWithProjection.from_pretrained(
         "h94/IP-Adapter",
@@ -80,9 +89,15 @@ if __name__ == "__main__":
 
     cur_out_path = os.path.join(args.out_path, f"{args.out_name}_no_imageRAG.png")
     if not os.path.exists(cur_out_path):
-        ip_image = Image.open("datasets/example_dataset/Common_Tern_0014_149194.jpg").convert("RGB")
-
-        control_image = Image.open("datasets/example_dataset/Toyota_celica.png").convert("RGB")
+        # 使用 FAISS 搜尋取代寫死的路徑
+        bird_image_path = search_bird_image_path(args.prompt, k=1, index_type="image")
+        car_image_path = search_car_image_path(args.prompt, k=1, index_type="combined")
+        
+        print(f"🐦 Bird 搜尋結果: {bird_image_path}")
+        print(f"🚗 Car 搜尋結果: {car_image_path}")
+        
+        ip_image = Image.open(bird_image_path).convert("RGB")
+        control_image = Image.open(car_image_path).convert("RGB")
 
         pipe_ip_control.set_ip_adapter_scale([args.ip_scale/2]*2)
 

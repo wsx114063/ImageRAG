@@ -232,3 +232,72 @@ def retrieve_img_per_caption(captions, image_paths, embeddings_path="", k=3, dev
         paths.append(pairs[0])
 
     return paths
+
+
+# ============== FAISS Index 搜尋功能 ==============
+# 直接引用已建立的 search_bird.py 和 search_car.py
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "datasets/bird"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "datasets/car"))
+
+from search_bird import BirdSearchEngine, get_clip_model as get_bird_clip_model
+from search_car import CarSearchEngine, get_clip_model as get_car_clip_model
+
+# 全域快取
+_bird_engine = None
+_car_engine = None
+
+
+def init_faiss_retrieval(bird_index_dir=None, car_index_dir=None, device='cuda'):
+    """
+    初始化 FAISS 檢索引擎 (只載入一次模型)
+    
+    Args:
+        bird_index_dir: Bird dataset index 目錄路徑
+        car_index_dir: Car dataset index 目錄路徑  
+        device: 'cuda' 或 'cpu'
+    """
+    global _bird_engine, _car_engine
+    
+    print("\n" + "=" * 60)
+    print("🚀 初始化 FAISS 檢索引擎")
+    print("=" * 60)
+    
+    if bird_index_dir:
+        _bird_engine = BirdSearchEngine(index_dir=bird_index_dir, device=device)
+    
+    if car_index_dir:
+        _car_engine = CarSearchEngine(index_dir=car_index_dir, device=device)
+    
+    print("\n🎉 FAISS 檢索引擎初始化完成！\n")
+
+
+def search_bird(prompt, k=1, index_type="image"):
+    """用 prompt 搜尋 Bird dataset"""
+    global _bird_engine
+    if _bird_engine is None:
+        raise RuntimeError("請先呼叫 init_faiss_retrieval() 初始化")
+    return _bird_engine.search_by_text(prompt, k=k, index_type=index_type)
+
+
+def search_car(prompt, k=1, index_type="combined"):
+    """用 prompt 搜尋 Car dataset"""
+    global _car_engine
+    if _car_engine is None:
+        raise RuntimeError("請先呼叫 init_faiss_retrieval() 初始化")
+    return _car_engine.search_by_text(prompt, k=k, index_type=index_type)
+
+
+def search_bird_image_path(prompt, k=1, index_type="image"):
+    """搜尋 Bird dataset，直接返回圖片路徑"""
+    results = search_bird(prompt, k=k, index_type=index_type)
+    paths = [r["path"] for r in results]
+    return paths[0] if k == 1 else paths
+
+
+def search_car_image_path(prompt, k=1, index_type="combined"):
+    """搜尋 Car dataset，直接返回圖片路徑"""
+    results = search_car(prompt, k=k, index_type=index_type)
+    paths = [r["path"] for r in results]
+    return paths[0] if k == 1 else paths
