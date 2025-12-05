@@ -85,6 +85,8 @@ if __name__ == "__main__":
         # 解析 JSON 並存入變數
         bird_keyword = keywords.get("bird", "")
         car_keyword = keywords.get("car", "")
+        print(f"🐦 Bird keyword: {bird_keyword}")
+        print(f"🚗 Car keyword: {car_keyword}")
         
         # 使用 FAISS 做Retrieval
         bird_image_path = search_bird_image_path(bird_keyword, k=1, index_type="combined")
